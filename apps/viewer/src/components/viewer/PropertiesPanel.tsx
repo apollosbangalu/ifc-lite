@@ -2,9 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import {
   Copy,
+  Check,
   Focus,
   EyeOff,
   Eye,
@@ -40,6 +41,15 @@ export function PropertiesPanel() {
   const toggleEntityVisibility = useViewerStore((s) => s.toggleEntityVisibility);
   const isEntityVisible = useViewerStore((s) => s.isEntityVisible);
   const { query, ifcDataStore } = useIfc();
+
+  // Copy feedback state - must be before any early returns (Rules of Hooks)
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, []);
 
   // Get spatial location info
   const spatialInfo = useMemo(() => {
@@ -167,10 +177,6 @@ export function PropertiesPanel() {
   const entityDescription = entityNode!.description;
   const entityObjectType = entityNode!.objectType;
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
-
   return (
     <div className="h-full flex flex-col border-l-2 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black">
       {/* Entity Header */}
@@ -231,17 +237,29 @@ export function PropertiesPanel() {
 
         {/* GlobalId */}
         {entityGlobalId && (
-          <div className="flex items-center gap-0 border border-zinc-200 dark:border-zinc-800">
+          <div className={`flex items-center gap-0 border transition-colors duration-200 ${
+            copied
+              ? 'border-emerald-400 dark:border-emerald-600'
+              : 'border-zinc-200 dark:border-zinc-800'
+          }`}>
             <code className="flex-1 text-[10px] bg-white dark:bg-zinc-950 px-2 py-1 truncate font-mono select-all text-zinc-900 dark:text-zinc-100">
               {entityGlobalId}
             </code>
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-6 w-6 rounded-none border-l border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-950"
+              className={`h-6 w-6 rounded-none border-l transition-all duration-200 ${
+                copied
+                  ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+                  : 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-950'
+              }`}
               onClick={() => copyToClipboard(entityGlobalId)}
             >
-              <Copy className="h-3 w-3 text-zinc-600 dark:text-zinc-400" />
+              {copied ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <Copy className="h-3 w-3 text-zinc-600 dark:text-zinc-400" />
+              )}
             </Button>
           </div>
         )}
