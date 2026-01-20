@@ -6,23 +6,23 @@
 
     ---
 
-    Install IFClite and parse your first IFC file in under 5 minutes.
+    Create a new project with `create-ifc-lite` or parse your first IFC file in under 5 minutes.
 
     [:octicons-arrow-right-24: Quick Start](guide/quickstart.md)
 
--   :material-book-open-variant:{ .lg .middle } __User Guide__
+-   :material-server:{ .lg .middle } __Server or Client?__
 
     ---
 
-    Learn how to use all features of IFClite for parsing, geometry, and rendering.
+    Choose between client-side WASM parsing or server-based processing with caching.
 
-    [:octicons-arrow-right-24: User Guide](guide/parsing.md)
+    [:octicons-arrow-right-24: Server Guide](guide/server.md)
 
 -   :material-cog:{ .lg .middle } __Architecture__
 
     ---
 
-    Understand the system design and how data flows through IFClite.
+    Understand the system design, data flow, and server/client paradigms.
 
     [:octicons-arrow-right-24: Architecture](architecture/overview.md)
 
@@ -30,7 +30,7 @@
 
     ---
 
-    Complete API documentation for TypeScript and Rust.
+    Complete API documentation for all 12 TypeScript packages.
 
     [:octicons-arrow-right-24: API Reference](api/typescript.md)
 
@@ -38,139 +38,148 @@
 
 ## What is IFClite?
 
-**IFClite** is a high-performance, browser-native IFC (Industry Foundation Classes) platform. It provides:
+**IFClite** is a high-performance IFC (Industry Foundation Classes) platform that runs in browsers, on servers, and as native desktop applications.
 
-- **Fast Parsing**: Zero-copy STEP tokenization at ~1,259 MB/s
-- **Streaming Geometry**: Progressive mesh processing with first triangles in 300-500ms
-- **WebGPU Rendering**: Modern GPU-accelerated 3D visualization
-- **Tiny Bundle**: Only ~86 KB total (93% smaller than alternatives)
-- **Full Schema Support**: 100% IFC4 coverage (776 entities)
+- **Two Paradigms** - Client-side WASM or server-based processing with caching
+- **Full IFC Support** - IFC4X3 (876 entities) + native IFC5 (IFCX) JSON format
+- **Fast Rendering** - WebGPU with first triangles in 300-500ms
+- **Tiny Bundle** - ~260 KB gzipped, 40% smaller than alternatives
+
+## Choose Your Path
+
+```mermaid
+flowchart LR
+    Start[Start] --> Q1{One-time view?}
+    Q1 -->|Yes| Client[Client-Side]
+    Q1 -->|No| Q2{Team/shared cache?}
+    Q2 -->|Yes| Server[Server]
+    Q2 -->|No| Q3{Large files?}
+    Q3 -->|Yes| Stream[Server + Streaming]
+    Q3 -->|No| Client
+    Client --> Q4{Desktop app?}
+    Q4 -->|Yes| Tauri[Tauri]
+    Q4 -->|No| Done[Ready!]
+    Server --> Done
+    Stream --> Done
+    Tauri --> Done
+```
 
 ## System Overview
 
-```mermaid
-flowchart TB
-    subgraph Input["Input Layer"]
-        IFC[("IFC File")]
-    end
+IFClite supports two processing paradigms:
 
-    subgraph Parser["Parsing Layer (Rust/WASM)"]
-        direction TB
-        STEP["STEP Tokenizer<br/>nom-based"]
-        Scanner["Entity Scanner<br/>zero-copy"]
-        Decoder["Entity Decoder<br/>lazy parsing"]
-        STEP --> Scanner --> Decoder
-    end
+=== "Client-Side (WASM)"
 
-    subgraph Storage["Storage Layer"]
-        direction LR
-        Columnar["Columnar Tables<br/>TypedArrays"]
-        Graph["Relationship Graph<br/>CSR Format"]
-        Buffers["Geometry Buffers<br/>GPU-ready"]
-    end
+    Process IFC files entirely in the browser using WebAssembly. Best for offline use, privacy-sensitive data, and simple deployments.
 
-    subgraph Query["Query Layer"]
-        direction LR
-        Fluent["Fluent API"]
-        SQL["SQL (DuckDB)"]
-        Traverse["Graph Traversal"]
-    end
+    ```mermaid
+    flowchart LR
+        IFC[IFC File] --> WASM[WASM Parser]
+        WASM --> Tables[Columnar Tables]
+        WASM --> Geometry[Geometry Buffers]
+        Tables --> Query[Query API]
+        Geometry --> Renderer[WebGPU Renderer]
+    ```
 
-    subgraph Output["Output Layer"]
-        direction LR
-        Renderer["WebGPU Renderer"]
-        Analytics["Analytics<br/>Parquet"]
-        Export["Export<br/>glTF/JSON-LD"]
-    end
+=== "Server-Side (Rust)"
 
-    IFC --> Parser
-    Parser --> Storage
-    Storage --> Query
-    Query --> Output
+    Process IFC files on a high-performance Rust server with parallel processing and intelligent caching. Best for team collaboration, large files, and production deployments.
 
-    style Input fill:#6366f1,stroke:#312e81,color:#fff
-    style Parser fill:#2563eb,stroke:#1e3a8a,color:#fff
-    style Storage fill:#16a34a,stroke:#14532d,color:#fff
-    style Query fill:#ea580c,stroke:#7c2d12,color:#fff
-    style Output fill:#c026d3,stroke:#701a75,color:#fff
-```
+    ```mermaid
+    flowchart LR
+        Upload[Upload IFC] --> Cache[(Cache)]
+        Cache -->|hit| Viewer[Viewer]
+        Upload -->|miss| Parse[Parse]
+        Parse --> Cache
+    ```
 
-## Quick Example
+## Quick Examples
 
-=== "TypeScript"
+=== "Create New Project"
+
+    ```bash
+    # Create a new project (recommended)
+    npx create-ifc-lite my-app
+    cd my-app && npm install && npm run parse
+
+    # Or create a React viewer
+    npx create-ifc-lite my-viewer --template react
+    cd my-viewer && npm install && npm run dev
+
+    # Or create a server backend
+    npx create-ifc-lite my-backend --template server
+    cd my-backend && npm run server:start
+    ```
+
+=== "Client-Side Parsing"
 
     ```typescript
     import { IfcParser } from '@ifc-lite/parser';
     import { Renderer } from '@ifc-lite/renderer';
 
-    // Parse IFC file
+    // Parse IFC file in browser
     const parser = new IfcParser();
-    const file = await fetch('model.ifc').then(r => r.arrayBuffer());
-    const result = await parser.parse(file);
+    const store = await parser.parseColumnar(buffer, {
+      onProgress: ({ phase, percent }) => console.log(`${phase}: ${percent}%`)
+    });
 
     // Query entities
-    const walls = result.entities.filter(e => e.type === 'IFCWALL');
+    const walls = store.entityIndex.byType.get('IFCWALL') ?? [];
     console.log(`Found ${walls.length} walls`);
 
     // Render geometry
-    const canvas = document.getElementById('viewer');
     const renderer = new Renderer(canvas);
-    await renderer.loadGeometry(result.geometry);
-    renderer.render();
+    await renderer.init();
+    // ... load geometry and render
     ```
 
-=== "Rust"
+=== "Server + Client"
 
-    ```rust
-    use ifc_lite_core::{parse_stream, StreamConfig, ParseEvent};
+    ```typescript
+    import { IfcServerClient } from '@ifc-lite/server-client';
 
-    // Parse IFC file
-    let content = std::fs::read_to_string("model.ifc")?;
-    let config = StreamConfig::default();
+    // Connect to server
+    const client = new IfcServerClient({ baseUrl: 'https://your-server.com' });
 
-    // Stream parse events
-    for event in parse_stream(&content, config) {
-        match event {
-            ParseEvent::Entity { id, type_name, .. } => {
-                println!("Entity #{}: {}", id, type_name);
-            }
-            ParseEvent::Progress { percent } => {
-                println!("Progress: {}%", percent);
-            }
-            _ => {}
-        }
+    // Parse with intelligent caching (skips upload if cached)
+    const result = await client.parseParquet(file);
+
+    // Or stream for large files
+    for await (const event of client.parseStream(file)) {
+      if (event.type === 'batch') {
+        renderer.addMeshes(event.meshes);
+      }
     }
     ```
 
-## Key Features
+=== "IFC5 (IFCX) Format"
 
-| Feature | Description |
-|---------|-------------|
-| **Zero-Copy Parsing** | Direct memory access without data copying |
-| **Streaming Pipeline** | Progressive geometry processing |
-| **WebGPU Rendering** | Modern GPU acceleration |
-| **Columnar Storage** | Memory-efficient TypedArray storage |
-| **Full IFC4X3 Schema** | 876 entities, 449 types, 211 enums |
-| **Cross-Platform** | Browser, Node.js, and native Rust |
+    ```typescript
+    import { parseAuto } from '@ifc-lite/parser';
 
-## Performance Comparison
+    // Auto-detect IFC4 (STEP) or IFC5 (IFCX JSON)
+    const result = await parseAuto(buffer);
 
-```mermaid
-xychart-beta
-    title "WASM Size (MB)"
-    x-axis ["IFClite", "web-ifc", "IfcOpenShell"]
-    y-axis "Size (MB)" 0 --> 16
-    bar [0.65, 1.1, 15]
-```
+    if (result.format === 'ifcx') {
+      // IFC5 with ECS composition and USD geometry
+      console.log('IFC5 file with', result.meshes.length, 'meshes');
+    } else {
+      // IFC4 STEP format
+      console.log('IFC4 file with', result.store.entityCount, 'entities');
+    }
+    ```
+
+## Packages
+
+**TypeScript:** `@ifc-lite/parser` · `@ifc-lite/geometry` · `@ifc-lite/renderer` · `@ifc-lite/server-client` · `@ifc-lite/cache` · `@ifc-lite/query` · `@ifc-lite/export`
+
+**Rust:** `ifc-lite-core` · `ifc-lite-geometry` · `ifc-lite-wasm` · `ifc-lite-server`
+
+**CLI:** `npx create-ifc-lite` to scaffold a new project
 
 ## Browser Support
 
-| Browser | Version | WebGPU |
-|---------|---------|--------|
-| Chrome | 113+ | :material-check: |
-| Edge | 113+ | :material-check: |
-| Firefox | 127+ | :material-check: |
-| Safari | 18+ | :material-check: |
+Chrome 113+ · Edge 113+ · Firefox 127+ · Safari 18+ (all with WebGPU)
 
 ## Next Steps
 
@@ -178,19 +187,26 @@ xychart-beta
 
 -   [:material-download: __Installation__](guide/installation.md)
 
-    Install IFClite in your project
+    Multiple ways to install: npm, Cargo, Docker, or create-ifc-lite
 
 -   [:material-play: __Quick Start__](guide/quickstart.md)
 
-    Parse your first IFC file
+    Parse your first IFC file with client or server
+
+-   [:material-server: __Server Guide__](guide/server.md)
+
+    Set up server-based processing with caching
 
 -   [:material-school: __Tutorials__](tutorials/building-viewer.md)
 
-    Build a complete IFC viewer
+    Build a complete IFC viewer from scratch
+
+-   [:material-file-document: __Parsing Guide__](guide/parsing.md)
+
+    Deep dive into parsing modes and IFC5 support
 
 -   [:material-github: __Source Code__](https://github.com/louistrue/ifc-lite)
 
     View on GitHub
 
 </div>
-
