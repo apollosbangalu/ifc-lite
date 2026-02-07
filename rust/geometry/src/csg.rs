@@ -109,6 +109,12 @@ impl Triangle {
     }
 }
 
+/// Maximum combined polygon count for CSG operations.
+/// The csgrs BSP tree can infinite-recurse on certain polygon configurations
+/// (coplanar/near-coplanar faces cause repeated splitting with exponential growth).
+/// This limit prevents stack overflow in both native and WASM builds.
+const MAX_CSG_POLYGONS: usize = 2000;
+
 /// CSG Clipping Processor
 pub struct ClippingProcessor {
     /// Epsilon for floating point comparisons
@@ -720,8 +726,12 @@ impl ClippingProcessor {
             return Ok(host_mesh.clone());
         }
 
+        // Safety: skip CSG if combined polygon count risks BSP infinite recursion
+        if host_csg.polygons.len() + opening_csg.polygons.len() > MAX_CSG_POLYGONS {
+            return Ok(host_mesh.clone());
+        }
+
         // Perform CSG difference (host - opening)
-        // Note: catch_unwind doesn't work with panic_abort, so we rely on input validation
         let result_csg = host_csg.difference(&opening_csg);
 
         // Check if result is empty
@@ -984,6 +994,13 @@ impl ClippingProcessor {
             return Ok(merged);
         }
 
+        // Safety: skip CSG if combined polygon count risks BSP infinite recursion
+        if csg_a.polygons.len() + csg_b.polygons.len() > MAX_CSG_POLYGONS {
+            let mut merged = mesh_a.clone();
+            merged.merge(mesh_b);
+            return Ok(merged);
+        }
+
         // Perform CSG union
         let result_csg = csg_a.union(&csg_b);
 
@@ -1014,6 +1031,11 @@ impl ClippingProcessor {
         // Skip CSG if either mesh has too few polygons for a valid solid
         if csg_a.polygons.len() < 4 || csg_b.polygons.len() < 4 {
             return Ok(Mesh::new());
+        }
+
+        // Safety: skip CSG if combined polygon count risks BSP infinite recursion
+        if csg_a.polygons.len() + csg_b.polygons.len() > MAX_CSG_POLYGONS {
+            return Ok(mesh_a.clone());
         }
 
         // Perform CSG intersection
