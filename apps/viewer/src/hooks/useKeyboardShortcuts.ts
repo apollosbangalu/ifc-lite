@@ -177,7 +177,7 @@ export const KEYBOARD_SHORTCUTS = [
   { key: 'H', description: 'Home (Isometric view)', category: 'Camera' },
   { key: 'Z', description: 'Fit all (zoom extents)', category: 'Camera' },
   { key: 'F', description: 'Frame selection', category: 'Camera' },
-  { key: '0-6', description: 'Preset views', category: 'Camera' },
+  { key: '1-6', description: 'Preset views', category: 'Camera' },
   { key: 'T', description: 'Toggle theme', category: 'UI' },
   { key: 'Esc', description: 'Reset all (clear selection, filters, isolation)', category: 'Selection' },
   { key: '?', description: 'Show info panel', category: 'Help' },

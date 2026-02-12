@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   Focus,
+  Crosshair,
   Home,
   Maximize2,
   Grid3x3,
@@ -35,6 +36,11 @@ import {
   Plus,
   MessageSquare,
   ClipboardCheck,
+  Pin,
+  PinOff,
+  Palette,
+  Orbit,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -60,6 +66,7 @@ import { ExportDialog } from './ExportDialog';
 import { BulkPropertyEditor } from './BulkPropertyEditor';
 import { DataConnector } from './DataConnector';
 import { ExportChangesButton } from './ExportChangesButton';
+import { useFloorplanView } from '@/hooks/useFloorplanView';
 
 type Tool = 'select' | 'pan' | 'orbit' | 'walk' | 'measure' | 'section';
 
@@ -141,6 +148,9 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
   const addModelInputRef = useRef<HTMLInputElement>(null);
   const { loadFile, loading, progress, geometryResult, ifcDataStore, models, clearAllModels, loadFilesSequentially, loadFederatedIfcx, addIfcxOverlays, addModel } = useIfc();
 
+  // Floorplan view
+  const { availableStoreys, activateFloorplan } = useFloorplanView();
+
   // Check if we have models loaded (for showing add model button)
   const hasModelsLoaded = models.size > 0 || (geometryResult?.meshes && geometryResult.meshes.length > 0);
   const activeTool = useViewerStore((state) => state.activeTool);
@@ -166,6 +176,18 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
   const listPanelVisible = useViewerStore((state) => state.listPanelVisible);
   const toggleListPanel = useViewerStore((state) => state.toggleListPanel);
   const setRightPanelCollapsed = useViewerStore((state) => state.setRightPanelCollapsed);
+  const projectionMode = useViewerStore((state) => state.projectionMode);
+  const toggleProjectionMode = useViewerStore((state) => state.toggleProjectionMode);
+  // Pinboard state
+  const pinboardEntities = useViewerStore((state) => state.pinboardEntities);
+  const addToPinboard = useViewerStore((state) => state.addToPinboard);
+  const removeFromPinboard = useViewerStore((state) => state.removeFromPinboard);
+  const showPinboard = useViewerStore((state) => state.showPinboard);
+  const clearPinboard = useViewerStore((state) => state.clearPinboard);
+  const selectedEntity = useViewerStore((state) => state.selectedEntity);
+  // Lens state
+  const lensPanelVisible = useViewerStore((state) => state.lensPanelVisible);
+  const toggleLensPanel = useViewerStore((state) => state.toggleLensPanel);
 
   // Check which type geometries exist across ALL loaded models (federation-aware)
   const typeGeometryExists = useMemo(() => {
@@ -389,7 +411,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
 
   return (
     <div className="flex items-center gap-1 px-2 h-12 border-b bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 relative z-50">
-      {/* File Operations */}
+      {/* ── File Operations ── */}
       <input
         ref={fileInputRef}
         type="file"
@@ -543,6 +565,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
       {/* Export Changes Button - shows when there are pending mutations */}
       <ExportChangesButton />
 
+      {/* ── Panels ── */}
       {/* BCF Issues Button */}
       <Tooltip>
         <TooltipTrigger asChild>
@@ -610,7 +633,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
 
       <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Navigation Tools */}
+      {/* ── Navigation Tools ── */}
       <ToolButton tool="select" icon={MousePointer2} label="Select" shortcut="V" activeTool={activeTool} onToolChange={setActiveTool} />
       <ToolButton tool="pan" icon={Hand} label="Pan" shortcut="P" activeTool={activeTool} onToolChange={setActiveTool} />
       <ToolButton tool="orbit" icon={Rotate3d} label="Orbit" shortcut="O" activeTool={activeTool} onToolChange={setActiveTool} />
@@ -618,16 +641,52 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
 
       <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Measurement & Section */}
+      {/* ── Measurement & Section ── */}
       <ToolButton tool="measure" icon={Ruler} label="Measure" shortcut="M" activeTool={activeTool} onToolChange={setActiveTool} />
       <ToolButton tool="section" icon={Scissors} label="Section" shortcut="X" activeTool={activeTool} onToolChange={setActiveTool} />
 
+      {/* Floorplan dropdown */}
+      {availableStoreys.length > 0 && (
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm">
+                  <Building2 className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Quick Floorplan</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent>
+            {availableStoreys.map((storey) => (
+              <DropdownMenuItem
+                key={`${storey.modelId}-${storey.expressId}`}
+                onClick={() => activateFloorplan(storey)}
+              >
+                <Building2 className="h-4 w-4 mr-2" />
+                {storey.name}
+                <span className="ml-auto text-xs opacity-60">{storey.elevation.toFixed(1)}m</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
       <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Visibility */}
+      {/* ── Visibility & Filtering (all together) ── */}
       <ActionButton icon={Focus} label="Isolate Selection" onClick={handleIsolate} shortcut="I" disabled={!selectedEntityId} />
       <ActionButton icon={EyeOff} label="Hide Selection" onClick={handleHide} shortcut="Del" disabled={!selectedEntityId} />
       <ActionButton icon={Eye} label="Show All (Reset Filters)" onClick={handleShowAll} shortcut="A" />
+      <ActionButton icon={Maximize2} label="Fit All" onClick={() => cameraCallbacks.fitAll?.()} shortcut="Z" />
+      <ActionButton
+        icon={Crosshair}
+        label="Frame Selection"
+        onClick={() => cameraCallbacks.frameSelection?.()}
+        shortcut="F"
+        disabled={!selectedEntityId}
+      />
 
       <DropdownMenu>
         <Tooltip>
@@ -638,7 +697,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent>Type Visibility</TooltipContent>
+          <TooltipContent>Class Visibility</TooltipContent>
         </Tooltip>
         <DropdownMenuContent>
           {typeGeometryExists.spaces && (
@@ -671,16 +730,113 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* Pinboard dropdown */}
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={pinboardEntities.size > 0 ? 'default' : 'ghost'}
+                size="icon-sm"
+                className={cn(pinboardEntities.size > 0 && 'bg-primary text-primary-foreground relative')}
+              >
+                <Pin className="h-4 w-4" />
+                {pinboardEntities.size > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5 border border-background">
+                    {pinboardEntities.size}
+                  </span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Pinboard ({pinboardEntities.size})</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent>
+          <DropdownMenuItem
+            onClick={() => { if (selectedEntity) addToPinboard([selectedEntity]); }}
+            disabled={!selectedEntity}
+          >
+            <Pin className="h-4 w-4 mr-2" />
+            Pin Selection
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => { if (selectedEntity) removeFromPinboard([selectedEntity]); }}
+            disabled={!selectedEntity}
+          >
+            <PinOff className="h-4 w-4 mr-2" />
+            Unpin Selection
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => showPinboard()}
+            disabled={pinboardEntities.size === 0}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Show Pinboard
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => clearPinboard()}
+            disabled={pinboardEntities.size === 0}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear Pinboard
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Lens (rule-based filtering) */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={lensPanelVisible ? 'default' : 'ghost'}
+            size="icon-sm"
+            onClick={(e) => {
+              (e.currentTarget as HTMLButtonElement).blur();
+              if (!lensPanelVisible) {
+                setRightPanelCollapsed(false);
+              }
+              toggleLensPanel();
+            }}
+            className={cn(lensPanelVisible && 'bg-primary text-primary-foreground')}
+          >
+            <Palette className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Lens (Color Rules)</TooltipContent>
+      </Tooltip>
+
       <Separator orientation="vertical" className="h-6 mx-1" />
 
-      {/* Display Options */}
+      {/* ── Camera & View ── */}
+      <ActionButton icon={Home} label="Home (Isometric)" onClick={() => cameraCallbacks.home?.()} shortcut="H" />
+
+      {/* Orthographic / Perspective toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={projectionMode === 'orthographic' ? 'default' : 'ghost'}
+            size="icon-sm"
+            onClick={(e) => {
+              (e.currentTarget as HTMLButtonElement).blur();
+              toggleProjectionMode();
+            }}
+            className={cn(projectionMode === 'orthographic' && 'bg-primary text-primary-foreground')}
+          >
+            <Orbit className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {projectionMode === 'orthographic' ? 'Switch to Perspective' : 'Switch to Orthographic'}
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Hover Tooltips toggle */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
             variant={hoverTooltipsEnabled ? 'default' : 'ghost'}
             size="icon-sm"
             onClick={(e) => {
-              // Blur button to close tooltip after click
               (e.currentTarget as HTMLButtonElement).blur();
               toggleHoverTooltips();
             }}
@@ -694,19 +850,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
         </TooltipContent>
       </Tooltip>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
-
-      {/* Camera */}
-      <ActionButton icon={Home} label="Home (Isometric)" onClick={() => cameraCallbacks.home?.()} shortcut="H" />
-      <ActionButton icon={Maximize2} label="Fit All" onClick={() => cameraCallbacks.fitAll?.()} shortcut="Z" />
-      <ActionButton
-        icon={Focus}
-        label="Frame Selection"
-        onClick={() => cameraCallbacks.frameSelection?.()}
-        shortcut="F"
-        disabled={!selectedEntityId}
-      />
-
+      {/* Preset Views dropdown */}
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -716,7 +860,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent>Preset Views (0-6)</TooltipContent>
+          <TooltipContent>Preset Views</TooltipContent>
         </Tooltip>
         <DropdownMenuContent>
           <DropdownMenuItem onClick={() => cameraCallbacks.home?.()}>
