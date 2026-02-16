@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   FolderOpen,
   Download,
@@ -66,6 +66,7 @@ import { BulkPropertyEditor } from './BulkPropertyEditor';
 import { DataConnector } from './DataConnector';
 import { ExportChangesButton } from './ExportChangesButton';
 import { useFloorplanView } from '@/hooks/useFloorplanView';
+import { recordRecentFiles, cacheFileBlobs } from '@/lib/recent-files';
 
 type Tool = 'select' | 'pan' | 'orbit' | 'walk' | 'measure' | 'section';
 
@@ -147,6 +148,16 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
   const addModelInputRef = useRef<HTMLInputElement>(null);
   const { loadFile, loading, progress, geometryResult, ifcDataStore, models, clearAllModels, loadFilesSequentially, loadFederatedIfcx, addIfcxOverlays, addModel } = useIfc();
 
+  // Listen for programmatic file-load requests (from command palette recent files)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const file = (e as CustomEvent<File>).detail;
+      if (file) loadFile(file);
+    };
+    window.addEventListener('ifc-lite:load-file', handler);
+    return () => window.removeEventListener('ifc-lite:load-file', handler);
+  }, [loadFile]);
+
   // Floorplan view
   const { availableStoreys, activateFloorplan } = useFloorplanView();
 
@@ -169,8 +180,10 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
   const resetViewerState = useViewerStore((state) => state.resetViewerState);
   const bcfPanelVisible = useViewerStore((state) => state.bcfPanelVisible);
   const toggleBcfPanel = useViewerStore((state) => state.toggleBcfPanel);
+  const setBcfPanelVisible = useViewerStore((state) => state.setBcfPanelVisible);
   const idsPanelVisible = useViewerStore((state) => state.idsPanelVisible);
   const toggleIdsPanel = useViewerStore((state) => state.toggleIdsPanel);
+  const setIdsPanelVisible = useViewerStore((state) => state.setIdsPanelVisible);
   const listPanelVisible = useViewerStore((state) => state.listPanelVisible);
   const toggleListPanel = useViewerStore((state) => state.toggleListPanel);
   const setRightPanelCollapsed = useViewerStore((state) => state.setRightPanelCollapsed);
@@ -187,6 +200,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
   // Lens state
   const lensPanelVisible = useViewerStore((state) => state.lensPanelVisible);
   const toggleLensPanel = useViewerStore((state) => state.toggleLensPanel);
+  const setLensPanelVisible = useViewerStore((state) => state.setLensPanelVisible);
 
   // Check which type geometries exist across ALL loaded models (federation-aware)
   const typeGeometryExists = useMemo(() => {
@@ -230,6 +244,10 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
     );
 
     if (supportedFiles.length === 0) return;
+
+    // Track recently opened files (metadata + blob cache for instant reload)
+    recordRecentFiles(supportedFiles.map(f => ({ name: f.name, size: f.size })));
+    cacheFileBlobs(supportedFiles);
 
     if (supportedFiles.length === 1) {
       // Single file - use loadFile (simpler single-model path)
@@ -472,6 +490,7 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
     <div className="flex items-center gap-1 px-2 h-12 border-b bg-white dark:bg-black border-zinc-200 dark:border-zinc-800 relative z-50">
       {/* ── File Operations ── */}
       <input
+        id="file-input-open"
         ref={fileInputRef}
         type="file"
         accept=".ifc,.ifcx,.glb"
@@ -633,8 +652,10 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
             size="icon-sm"
             onClick={(e) => {
               (e.currentTarget as HTMLButtonElement).blur();
-              // If BCF is being shown, also expand the right panel
               if (!bcfPanelVisible) {
+                // Close other right-panel content first, then expand
+                setIdsPanelVisible(false);
+                setLensPanelVisible(false);
                 setRightPanelCollapsed(false);
               }
               toggleBcfPanel();
@@ -655,8 +676,10 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
             size="icon-sm"
             onClick={(e) => {
               (e.currentTarget as HTMLButtonElement).blur();
-              // If IDS is being shown, also expand the right panel
               if (!idsPanelVisible) {
+                // Close other right-panel content first, then expand
+                setBcfPanelVisible(false);
+                setLensPanelVisible(false);
                 setRightPanelCollapsed(false);
               }
               toggleIdsPanel();
@@ -677,6 +700,8 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
             size="icon-sm"
             onClick={(e) => {
               (e.currentTarget as HTMLButtonElement).blur();
+              // Close script panel (bottom-panel exclusivity)
+              useViewerStore.getState().setScriptPanelVisible(false);
               if (!listPanelVisible) {
                 setRightPanelCollapsed(false);
               }
@@ -826,6 +851,9 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
             onClick={(e) => {
               (e.currentTarget as HTMLButtonElement).blur();
               if (!lensPanelVisible) {
+                // Close other right-panel content first, then expand
+                setBcfPanelVisible(false);
+                setIdsPanelVisible(false);
                 setRightPanelCollapsed(false);
               }
               toggleLensPanel();

@@ -783,6 +783,7 @@ export function Viewport({ geometry, coordinateInfo, computedIsolatedIds, modelI
     geometryBoundsRef,
     pendingColorUpdates,
     clearPendingColorUpdates,
+    clearColorRef,
   });
 
   useRenderUpdates({

@@ -20,6 +20,8 @@ export interface UseGeometryStreamingParams {
   geometryBoundsRef: MutableRefObject<{ min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }>;
   pendingColorUpdates: Map<number, [number, number, number, number]> | null;
   clearPendingColorUpdates: () => void;
+  // Clear color ref — color update renders must preserve theme background
+  clearColorRef: MutableRefObject<[number, number, number, number]>;
 }
 
 export function useGeometryStreaming(params: UseGeometryStreamingParams): void {
@@ -32,6 +34,7 @@ export function useGeometryStreaming(params: UseGeometryStreamingParams): void {
     geometryBoundsRef,
     pendingColorUpdates,
     clearPendingColorUpdates,
+    clearColorRef,
   } = params;
 
   // Track processed meshes for incremental updates
@@ -397,7 +400,16 @@ export function useGeometryStreaming(params: UseGeometryStreamingParams): void {
         // Non-empty map = set color overrides
         scene.setColorOverrides(pendingColorUpdates, device, pipeline);
       }
-      renderer.render();
+      // Re-render with current theme background — render() without options
+      // defaults to black background.  Do NOT pass hiddenIds/isolatedIds here:
+      // visibility filtering causes partial batches which write depth only for
+      // visible elements, but overlay batches cover all geometry.  Without
+      // filtering, all original batches write depth for every entity, ensuring
+      // depthCompare 'equal' matches exactly for the overlay pass.
+      // The next render from useRenderUpdates will apply the correct visibility.
+      renderer.render({
+        clearColor: clearColorRef.current,
+      });
       clearPendingColorUpdates();
     }
   }, [pendingColorUpdates, isInitialized, clearPendingColorUpdates]);
