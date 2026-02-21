@@ -24,8 +24,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Box,
-  Sun,
-  Moon,
   HelpCircle,
   Loader2,
   Camera,
@@ -68,6 +66,7 @@ import { DataConnector } from './DataConnector';
 import { ExportChangesButton } from './ExportChangesButton';
 import { useFloorplanView } from '@/hooks/useFloorplanView';
 import { recordRecentFiles, cacheFileBlobs } from '@/lib/recent-files';
+import { ThemeSwitch } from './ThemeSwitch';
 
 type Tool = 'select' | 'pan' | 'orbit' | 'walk' | 'measure' | 'section';
 
@@ -166,8 +165,6 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
   const hasModelsLoaded = models.size > 0 || (geometryResult?.meshes && geometryResult.meshes.length > 0);
   const activeTool = useViewerStore((state) => state.activeTool);
   const setActiveTool = useViewerStore((state) => state.setActiveTool);
-  const theme = useViewerStore((state) => state.theme);
-  const toggleTheme = useViewerStore((state) => state.toggleTheme);
   const selectedEntityId = useViewerStore((state) => state.selectedEntityId);
   const hideEntities = useViewerStore((state) => state.hideEntities);
   const error = useViewerStore((state) => state.error);
@@ -909,27 +906,30 @@ export function MainToolbar({ onShowShortcuts }: MainToolbarProps = {} as MainTo
       )}
 
       {/* Right Side Actions */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Toggle Theme</TooltipContent>
-      </Tooltip>
+      <div className="flex items-center gap-2 ml-2 pl-2 border-l border-zinc-200 dark:border-zinc-700/60">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <ThemeSwitch />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>Toggle theme</TooltipContent>
+        </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onShowShortcuts?.()}
-          >
-            <HelpCircle className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Info (?)</TooltipContent>
-      </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={() => onShowShortcuts?.()}
+            >
+              <HelpCircle className="!h-[22px] !w-[22px]" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Info (?)</TooltipContent>
+        </Tooltip>
+      </div>
 
     </div>
   );
